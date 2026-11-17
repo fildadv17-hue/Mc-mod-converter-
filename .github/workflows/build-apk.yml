@@ -15,8 +15,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Generate Fixed Project & Xiaomi Permissions
+    - name: Clean & Generate Complete Android Project
       run: |
+        rm -rf appModConverter.kt MainActivity.kt AndroidManifest.xml activity_main.xml file_paths.xml app
         mkdir -p app/src/main/java/com/example/modconverter
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/xml
@@ -206,7 +207,7 @@ jobs:
                     android:layout_height="wrap_content"
                     android:fontFamily="monospace"
                     android:textColor="#00FF66"
-                    android:text="Ready. Tap Allow Xiaomi File Access first if on MIUI/HyperOS, then select a .jar file."
+                    android:text="Ready. Tap Button 1 to allow Xiaomi File Access, then tap Button 2 to select a .jar file."
                     android:textSize="12sp" />
             </ScrollView>
 
@@ -289,7 +290,7 @@ jobs:
                             startActivity(intent)
                         }
                     } else {
-                        appendLog("All-files access is already granted!")
+                        appendLog("Xiaomi All-Files Access is already enabled!")
                     }
                 } else {
                     ActivityCompat.requestPermissions(
@@ -302,7 +303,8 @@ jobs:
 
             private fun appendLog(message: String) {
                 runOnUiThread {
-                    logTextView.append("\n$message")
+                    val current = logTextView.text.toString()
+                    logTextView.text = current + "\n" + message
                 }
             }
 
@@ -314,22 +316,23 @@ jobs:
                 lifecycleScope.launch(Dispatchers.IO) {
                     try {
                         val inputStream = contentResolver.openInputStream(uri)
-                            ?: throw Exception("Cannot open selected file. Tap button 1 to allow Xiaomi file access.")
+                            ?: throw Exception("Cannot open file. Tap Button 1 to allow Xiaomi File Access.")
 
-                        val outputFile = File(cacheDir, "${addonName.replace(" ", "_")}.mcaddon")
+                        val safeName = addonName.replace(" ", "_")
+                        val outputFile = File(cacheDir, "$safeName.mcaddon")
                         if (outputFile.exists()) outputFile.delete()
 
                         val stats = ModConverter.convertJarToMcAddon(
                             jarInputStream = inputStream,
                             outputMcAddonFile = outputFile,
-                            addonName = addonName,
+                            addonName = safeName,
                             logger = { msg -> appendLog(msg) }
                         )
 
                         withContext(Dispatchers.Main) {
                             lastConvertedFile = outputFile
                             shareAddonButton.isEnabled = true
-                            appendLog("\n=== CONVERSION COMPLETE ===")
+                            appendLog("=== CONVERSION COMPLETE ===")
                             appendLog("Mod ID detected: ${stats.modId}")
                             appendLog("Item Textures ported: ${stats.itemTextures}")
                             appendLog("Block Textures ported: ${stats.blockTextures}")
@@ -339,7 +342,7 @@ jobs:
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
-                            appendLog("\n[ERROR] ${e.message}")
+                            appendLog("[ERROR] ${e.message}")
                         }
                     }
                 }
@@ -392,38 +395,36 @@ jobs:
                 val blockTextures = mutableMapOf<String, ByteArray>()
                 val langEntries = mutableMapOf<String, String>()
 
-                val regexItemTex = Regex("""assets/([^/]+)/textures/item(?:s)?/([^/]+)\.png""")
-                val regexBlockTex = Regex("""assets/([^/]+)/textures/block(?:s)?/([^/]+)\.png""")
-                val regexLang = Regex("""assets/([^/]+)/lang/en_us\.json""")
-
                 logger("Scanning .jar archive entries...")
                 ZipInputStream(jarInputStream).use { zis ->
                     var entry: ZipEntry? = zis.nextEntry
                     while (entry != null) {
                         val name = entry.name
-                        if (!entry.isDirectory) {
-                            regexItemTex.matchEntire(name)?.let { match ->
-                                modId = match.groupValues[1]
-                                val texName = match.groupValues[2]
-                                itemTextures[texName] = readBytes(zis)
-                                logger("Found item texture: $texName.png")
-                            }
-                            regexBlockTex.matchEntire(name)?.let { match ->
-                                modId = match.groupValues[1]
-                                val texName = match.groupValues[2]
-                                blockTextures[texName] = readBytes(zis)
-                                logger("Found block texture: $texName.png")
-                            }
-                            regexLang.matchEntire(name)?.let {
+                        if (!entry.isDirectory && name.startsWith("assets/")) {
+                            val parts = name.split("/")
+                            if (parts.size >= 5 && parts[2] == "textures" && name.endsWith(".png")) {
+                                modId = sanitizeId(parts[1])
+                                val folderType = parts[3]
+                                val rawFileName = parts.last().removeSuffix(".png")
+                                val cleanTexName = sanitizeId(rawFileName)
+
+                                if (folderType == "item" || folderType == "items") {
+                                    itemTextures[cleanTexName] = readBytes(zis)
+                                    logger("Found item texture: $cleanTexName.png")
+                                } else if (folderType == "block" || folderType == "blocks") {
+                                    blockTextures[cleanTexName] = readBytes(zis)
+                                    logger("Found block texture: $cleanTexName.png")
+                                }
+                            } else if (parts.size >= 4 && parts[2] == "lang" && parts.last().equals("en_us.json", ignoreCase = true)) {
                                 try {
                                     val jsonStr = String(readBytes(zis), Charsets.UTF_8)
                                     val json = JSONObject(jsonStr)
                                     json.keys().forEach { k ->
                                         langEntries[k] = json.optString(k)
                                     }
-                                    logger("Parsed en_us.json language file (${langEntries.size} keys)")
+                                    logger("Parsed en_us.json (${langEntries.size} keys)")
                                 } catch (e: Exception) {
-                                    logger("Skipped malformed lang file: ${e.message}")
+                                    logger("Skipped lang file: ${e.message}")
                                 }
                             }
                         }
@@ -437,7 +438,7 @@ jobs:
                 val bpUuidHeader = UUID.randomUUID().toString()
                 val bpUuidModule = UUID.randomUUID().toString()
 
-                logger("Building Bedrock Resource Pack (RP) & Behavior Pack (BP)...")
+                logger("Building Bedrock Resource Pack & Behavior Pack...")
 
                 ZipOutputStream(FileOutputStream(outputMcAddonFile)).use { zos ->
                     val rpManifest = createManifest(
@@ -461,13 +462,11 @@ jobs:
                     writeZipText(zos, "${addonName}_BP/manifest.json", bpManifest.toString(2))
 
                     val itemTextureData = JSONObject()
-                    for ((itemName, bytes) in itemTextures) {
-                        val cleanName = itemName.lowercase().replace(Regex("[^a-z0-9_]"), "_")
+                    for ((cleanName, bytes) in itemTextures) {
                         val texPath = "textures/items/$cleanName"
                         writeZipBytes(zos, "${addonName}_RP/$texPath.png", bytes)
 
                         val texEntry = JSONObject().put("textures", texPath)
                         itemTextureData.put("${modId}_$cleanName", texEntry)
 
-                        val itemBpJson = createBedrockItemJson(modId, cleanName, "${modId}_$cleanName")
-                        writeZipText(zos, "${addonName}_BP/items/$cleanName.json
+                        val itemBpJson = c

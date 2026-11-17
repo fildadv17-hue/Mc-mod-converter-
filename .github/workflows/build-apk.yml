@@ -3,8 +3,6 @@ name: Build Android APK
 on:
   push:
     branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -12,461 +10,301 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Clean & Generate Complete Android Project
+    - name: Generate Clean Project
       run: |
-        rm -rf appModConverter.kt MainActivity.kt AndroidManifest.xml activity_main.xml file_paths.xml app
+        rm -rf * .github
         mkdir -p app/src/main/java/com/example/modconverter
         mkdir -p app/src/main/res/layout
         mkdir -p app/src/main/res/xml
 
-        cat << 'EOF' > settings.gradle
-        pluginManagement {
-            repositories {
-                google()
-                mavenCentral()
-                gradlePluginPortal()
-            }
-        }
-        dependencyResolutionManagement {
-            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-            repositories {
-                google()
-                mavenCentral()
-            }
-        }
-        rootProject.name = "JavaToBedrockConverter"
-        include ':app'
-        EOF
+        printf '%s\n' \
+          'pluginManagement {' \
+          '    repositories { google(); mavenCentral(); gradlePluginPortal() }' \
+          '}' \
+          'dependencyResolutionManagement {' \
+          '    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)' \
+          '    repositories { google(); mavenCentral() }' \
+          '}' \
+          'rootProject.name = "JavaToBedrockConverter"' \
+          'include ":app"' > settings.gradle
 
-        cat << 'EOF' > gradle.properties
-        org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-        android.useAndroidX=true
-        kotlin.code.style=official
-        android.nonTransitiveRClass=true
-        EOF
+        printf '%s\n' \
+          'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' \
+          'android.useAndroidX=true' \
+          'kotlin.code.style=official' \
+          'android.nonTransitiveRClass=true' > gradle.properties
 
-        cat << 'EOF' > build.gradle
-        plugins {
-            id 'com.android.application' version '8.2.2' apply false
-            id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
-        }
-        EOF
+        printf '%s\n' \
+          'plugins {' \
+          '    id "com.android.application" version "8.2.2" apply false' \
+          '    id "org.jetbrains.kotlin.android" version "1.9.22" apply false' \
+          '}' > build.gradle
 
-        cat << 'EOF' > app/build.gradle
-        plugins {
-            id 'com.android.application'
-            id 'org.jetbrains.kotlin.android'
-        }
+        printf '%s\n' \
+          'plugins {' \
+          '    id "com.android.application"' \
+          '    id "org.jetbrains.kotlin.android"' \
+          '}' \
+          'android {' \
+          '    namespace "com.example.modconverter"' \
+          '    compileSdk 34' \
+          '    defaultConfig {' \
+          '        applicationId "com.example.modconverter"' \
+          '        minSdk 26' \
+          '        targetSdk 34' \
+          '        versionCode 1' \
+          '        versionName "1.0"' \
+          '    }' \
+          '    compileOptions {' \
+          '        sourceCompatibility JavaVersion.VERSION_17' \
+          '        targetCompatibility JavaVersion.VERSION_17' \
+          '    }' \
+          '    kotlinOptions { jvmTarget = "17" }' \
+          '}' \
+          'dependencies {' \
+          '    implementation "androidx.core:core-ktx:1.12.0"' \
+          '    implementation "androidx.appcompat:appcompat:1.6.1"' \
+          '    implementation "com.google.android.material:material:1.11.0"' \
+          '    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"' \
+          '    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.7.0"' \
+          '}' > app/build.gradle
 
-        android {
-            namespace 'com.example.modconverter'
-            compileSdk 34
+        printf '%s\n' \
+          '<?xml version="1.0" encoding="utf-8"?>' \
+          '<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">' \
+          '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />' \
+          '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />' \
+          '    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />' \
+          '    <application android:allowBackup="true" android:label="Java2Bedrock Porter" android:requestLegacyExternalStorage="true" android:supportsRtl="true" android:theme="@style/Theme.MaterialComponents.DayNight.DarkActionBar">' \
+          '        <activity android:name=".MainActivity" android:exported="true">' \
+          '            <intent-filter>' \
+          '                <action android:name="android.intent.action.MAIN" />' \
+          '                <category android:name="android.intent.category.LAUNCHER" />' \
+          '            </intent-filter>' \
+          '            <intent-filter>' \
+          '                <action android:name="android.intent.action.SEND" />' \
+          '                <category android:name="android.intent.category.DEFAULT" />' \
+          '                <data android:mimeType="*/*" />' \
+          '            </intent-filter>' \
+          '        </activity>' \
+          '        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.provider" android:exported="false" android:grantUriPermissions="true">' \
+          '            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />' \
+          '        </provider>' \
+          '    </application>' \
+          '</manifest>' > app/src/main/AndroidManifest.xml
 
-            defaultConfig {
-                applicationId "com.example.modconverter"
-                minSdk 26
-                targetSdk 34
-                versionCode 1
-                versionName "1.0"
-            }
+        printf '%s\n' \
+          '<?xml version="1.0" encoding="utf-8"?>' \
+          '<paths>' \
+          '    <cache-path name="converted_addons" path="." />' \
+          '    <files-path name="converted_files" path="." />' \
+          '    <external-path name="external_files" path="." />' \
+          '</paths>' > app/src/main/res/xml/file_paths.xml
 
-            buildTypes {
-                release {
-                    minifyEnabled false
-                }
-            }
-            compileOptions {
-                sourceCompatibility JavaVersion.VERSION_17
-                targetCompatibility JavaVersion.VERSION_17
-            }
-            kotlinOptions {
-                jvmTarget = '17'
-            }
-        }
+        printf '%s\n' \
+          '<?xml version="1.0" encoding="utf-8"?>' \
+          '<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="20dp">' \
+          '    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Java Mod (.jar) to Bedrock (.mcaddon)" android:textSize="20sp" android:textStyle="bold" android:layout_marginBottom="8dp"/>' \
+          '    <Button android:id="@+id/grantStorageButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="1. Allow Xiaomi File Access" android:layout_marginBottom="10dp"/>' \
+          '    <EditText android:id="@+id/addonNameInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Enter Add-On Name" android:text="PortedJavaMod" android:layout_marginBottom="10dp"/>' \
+          '    <Button android:id="@+id/selectJarButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="2. Select Java Mod (.jar)" android:layout_marginBottom="10dp"/>' \
+          '    <Button android:id="@+id/shareAddonButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="3. Export / Open .mcaddon" android:enabled="false" android:layout_marginBottom="14dp"/>' \
+          '    <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:background="#1E1E1E" android:padding="10dp">' \
+          '        <TextView android:id="@+id/logTextView" android:layout_width="match_parent" android:layout_height="wrap_content" android:fontFamily="monospace" android:textColor="#00FF66" android:text="Ready. Tap Button 1 for Xiaomi File Access, then Button 2 to pick a .jar mod." android:textSize="12sp" />' \
+          '    </ScrollView>' \
+          '</LinearLayout>' > app/src/main/res/layout/activity_main.xml
 
-        dependencies {
-            implementation 'androidx.core:core-ktx:1.12.0'
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.11.0'
-            implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
-            implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
-        }
-        EOF
+        printf '%s\n' \
+          'package com.example.modconverter' \
+          'import android.Manifest' \
+          'import android.content.Intent' \
+          'import android.net.Uri' \
+          'import android.os.Build' \
+          'import android.os.Bundle' \
+          'import android.os.Environment' \
+          'import android.provider.Settings' \
+          'import android.widget.Button' \
+          'import android.widget.EditText' \
+          'import android.widget.TextView' \
+          'import androidx.activity.result.contract.ActivityResultContracts' \
+          'import androidx.appcompat.app.AppCompatActivity' \
+          'import androidx.core.app.ActivityCompat' \
+          'import androidx.core.content.FileProvider' \
+          'import androidx.lifecycle.lifecycleScope' \
+          'import kotlinx.coroutines.Dispatchers' \
+          'import kotlinx.coroutines.launch' \
+          'import kotlinx.coroutines.withContext' \
+          'import java.io.File' \
+          'class MainActivity : AppCompatActivity() {' \
+          '    private lateinit var addonNameInput: EditText' \
+          '    private lateinit var grantStorageButton: Button' \
+          '    private lateinit var selectJarButton: Button' \
+          '    private lateinit var shareAddonButton: Button' \
+          '    private lateinit var logTextView: TextView' \
+          '    private var lastConvertedFile: File? = null' \
+          '    private val pickJarLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->' \
+          '        uri?.let { processSelectedJar(it) }' \
+          '    }' \
+          '    override fun onCreate(savedInstanceState: Bundle?) {' \
+          '        super.onCreate(savedInstanceState)' \
+          '        setContentView(R.layout.activity_main)' \
+          '        addonNameInput = findViewById(R.id.addonNameInput)' \
+          '        grantStorageButton = findViewById(R.id.grantStorageButton)' \
+          '        selectJarButton = findViewById(R.id.selectJarButton)' \
+          '        shareAddonButton = findViewById(R.id.shareAddonButton)' \
+          '        logTextView = findViewById(R.id.logTextView)' \
+          '        grantStorageButton.setOnClickListener { requestXiaomiFileAccess() }' \
+          '        selectJarButton.setOnClickListener { pickJarLauncher.launch(arrayOf("*/*")) }' \
+          '        shareAddonButton.setOnClickListener { lastConvertedFile?.let { f -> shareAddon(f) } }' \
+          '        if (intent?.action == Intent.ACTION_SEND) {' \
+          '            val sharedUri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)' \
+          '            sharedUri?.let { processSelectedJar(it) }' \
+          '        }' \
+          '    }' \
+          '    private fun requestXiaomiFileAccess() {' \
+          '        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {' \
+          '            if (!Environment.isExternalStorageManager()) {' \
+          '                try {' \
+          '                    val i = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)' \
+          '                    i.data = Uri.parse("package:$packageName")' \
+          '                    startActivity(i)' \
+          '                } catch (e: Exception) {' \
+          '                    startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))' \
+          '                }' \
+          '            } else { appendLog("Xiaomi All-Files Access is already enabled!") }' \
+          '        } else {' \
+          '            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE), 100)' \
+          '        }' \
+          '    }' \
+          '    private fun appendLog(msg: String) {' \
+          '        runOnUiThread { logTextView.append("\n" + msg) }' \
+          '    }' \
+          '    private fun processSelectedJar(uri: Uri) {' \
+          '        val rawName = addonNameInput.text.toString().ifBlank { "PortedJavaMod" }' \
+          '        val safeName = rawName.replace(" ", "_")' \
+          '        logTextView.text = "Starting conversion for: $safeName..."' \
+          '        shareAddonButton.isEnabled = false' \
+          '        lifecycleScope.launch(Dispatchers.IO) {' \
+          '            try {' \
+          '                val input = contentResolver.openInputStream(uri) ?: throw Exception("Cannot open file. Tap Button 1 first.")' \
+          '                val outFile = File(cacheDir, "$safeName.mcaddon")' \
+          '                if (outFile.exists()) outFile.delete()' \
+          '                val stats = ModConverter.convertJarToMcAddon(input, outFile, safeName) { m -> appendLog(m) }' \
+          '                withContext(Dispatchers.Main) {' \
+          '                    lastConvertedFile = outFile' \
+          '                    shareAddonButton.isEnabled = true' \
+          '                    appendLog("=== CONVERSION COMPLETE ===")' \
+          '                    appendLog("Mod ID: ${stats.modId}")' \
+          '                    appendLog("Items ported: ${stats.generatedItems}")' \
+          '                    appendLog("Blocks ported: ${stats.generatedBlocks}")' \
+          '                }' \
+          '            } catch (e: Exception) {' \
+          '                withContext(Dispatchers.Main) { appendLog("[ERROR] ${e.message}") }' \
+          '            }' \
+          '        }' \
+          '    }' \
+          '    private fun shareAddon(file: File) {' \
+          '        val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)' \
+          '        val intent = Intent(Intent.ACTION_SEND).apply {' \
+          '            type = "application/octet-stream"' \
+          '            putExtra(Intent.EXTRA_STREAM, uri)' \
+          '            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)' \
+          '        }' \
+          '        startActivity(Intent.createChooser(intent, "Export or Open .mcaddon"))' \
+          '    }' \
+          '}' > app/src/main/java/com/example/modconverter/MainActivity.kt
 
-        cat << 'EOF' > app/src/main/AndroidManifest.xml
-        <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-            xmlns:tools="http://schemas.android.com/tools">
-
-            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-            <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-            <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
-
-            <application
-                android:allowBackup="true"
-                android:label="Java2Bedrock Porter"
-                android:requestLegacyExternalStorage="true"
-                android:supportsRtl="true"
-                android:theme="@style/Theme.MaterialComponents.DayNight.DarkActionBar">
-                <activity
-                    android:name=".MainActivity"
-                    android:exported="true">
-                    <intent-filter>
-                        <action android:name="android.intent.action.MAIN" />
-                        <category android:name="android.intent.category.LAUNCHER" />
-                    </intent-filter>
-                    <intent-filter>
-                        <action android:name="android.intent.action.SEND" />
-                        <category android:name="android.intent.category.DEFAULT" />
-                        <data android:mimeType="*/*" />
-                    </intent-filter>
-                </activity>
-
-                <provider
-                    android:name="androidx.core.content.FileProvider"
-                    android:authorities="${applicationId}.provider"
-                    android:exported="false"
-                    android:grantUriPermissions="true">
-                    <meta-data
-                        android:name="android.support.FILE_PROVIDER_PATHS"
-                        android:resource="@xml/file_paths" />
-                </provider>
-            </application>
-
-        </manifest>
-        EOF
-
-        cat << 'EOF' > app/src/main/res/xml/file_paths.xml
-        <?xml version="1.0" encoding="utf-8"?>
-        <paths>
-            <cache-path name="converted_addons" path="." />
-            <files-path name="converted_files" path="." />
-            <external-path name="external_files" path="." />
-        </paths>
-        EOF
-
-        cat << 'EOF' > app/src/main/res/layout/activity_main.xml
-        <?xml version="1.0" encoding="utf-8"?>
-        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Java Mod (.jar) to Bedrock (.mcaddon)"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp"/>
-
-            <Button
-                android:id="@+id/grantStorageButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="1. Allow Xiaomi File Access"
-                android:layout_marginBottom="10dp"/>
-
-            <EditText
-                android:id="@+id/addonNameInput"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="Enter Add-On Name (e.g. MyPortedMod)"
-                android:text="PortedJavaMod"
-                android:layout_marginBottom="10dp"/>
-
-            <Button
-                android:id="@+id/selectJarButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="2. Select Java Mod (.jar)"
-                android:layout_marginBottom="10dp"/>
-
-            <Button
-                android:id="@+id/shareAddonButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="3. Export / Open .mcaddon in Minecraft"
-                android:enabled="false"
-                android:layout_marginBottom="14dp"/>
-
-            <ScrollView
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:background="#1E1E1E"
-                android:padding="10dp">
-
-                <TextView
-                    android:id="@+id/logTextView"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:textColor="#00FF66"
-                    android:text="Ready. Tap Button 1 to allow Xiaomi File Access, then tap Button 2 to select a .jar file."
-                    android:textSize="12sp" />
-            </ScrollView>
-
-        </LinearLayout>
-        EOF
-
-        cat << 'EOF' > app/src/main/java/com/example/modconverter/MainActivity.kt
-        package com.example.modconverter
-
-        import android.Manifest
-        import android.content.Intent
-        import android.net.Uri
-        import android.os.Build
-        import android.os.Bundle
-        import android.os.Environment
-        import android.provider.Settings
-        import android.widget.Button
-        import android.widget.EditText
-        import android.widget.TextView
-        import androidx.activity.result.contract.ActivityResultContracts
-        import androidx.appcompat.app.AppCompatActivity
-        import androidx.core.app.ActivityCompat
-        import androidx.core.content.FileProvider
-        import androidx.lifecycle.lifecycleScope
-        import kotlinx.coroutines.Dispatchers
-        import kotlinx.coroutines.launch
-        import kotlinx.coroutines.withContext
-        import java.io.File
-
-        class MainActivity : AppCompatActivity() {
-
-            private lateinit var addonNameInput: EditText
-            private lateinit var grantStorageButton: Button
-            private lateinit var selectJarButton: Button
-            private lateinit var shareAddonButton: Button
-            private lateinit var logTextView: TextView
-            private var lastConvertedFile: File? = null
-
-            private val pickJarLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-                uri?.let { processSelectedJar(it) }
-            }
-
-            override fun onCreate(savedInstanceState: Bundle?) {
-                super.onCreate(savedInstanceState)
-                setContentView(R.layout.activity_main)
-
-                addonNameInput = findViewById(R.id.addonNameInput)
-                grantStorageButton = findViewById(R.id.grantStorageButton)
-                selectJarButton = findViewById(R.id.selectJarButton)
-                shareAddonButton = findViewById(R.id.shareAddonButton)
-                logTextView = findViewById(R.id.logTextView)
-
-                grantStorageButton.setOnClickListener {
-                    requestXiaomiFileAccess()
-                }
-
-                selectJarButton.setOnClickListener {
-                    pickJarLauncher.launch(arrayOf("*/*"))
-                }
-
-                shareAddonButton.setOnClickListener {
-                    lastConvertedFile?.let { file -> shareAddon(file) }
-                }
-
-                if (intent?.action == Intent.ACTION_SEND) {
-                    val sharedUri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
-                    sharedUri?.let { processSelectedJar(it) }
-                }
-            }
-
-            private fun requestXiaomiFileAccess() {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    if (!Environment.isExternalStorageManager()) {
-                        try {
-                            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                            intent.data = Uri.parse("package:$packageName")
-                            startActivity(intent)
-                        } catch (e: Exception) {
-                            val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                            startActivity(intent)
-                        }
-                    } else {
-                        appendLog("Xiaomi All-Files Access is already enabled!")
-                    }
-                } else {
-                    ActivityCompat.requestPermissions(
-                        this,
-                        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE),
-                        100
-                    )
-                }
-            }
-
-            private fun appendLog(message: String) {
-                runOnUiThread {
-                    val current = logTextView.text.toString()
-                    logTextView.text = current + "\n" + message
-                }
-            }
-
-            private fun processSelectedJar(uri: Uri) {
-                val addonName = addonNameInput.text.toString().ifBlank { "PortedJavaMod" }
-                logTextView.text = "Starting conversion for: $addonName..."
-                shareAddonButton.isEnabled = false
-
-                lifecycleScope.launch(Dispatchers.IO) {
-                    try {
-                        val inputStream = contentResolver.openInputStream(uri)
-                            ?: throw Exception("Cannot open file. Tap Button 1 to allow Xiaomi File Access.")
-
-                        val safeName = addonName.replace(" ", "_")
-                        val outputFile = File(cacheDir, "$safeName.mcaddon")
-                        if (outputFile.exists()) outputFile.delete()
-
-                        val stats = ModConverter.convertJarToMcAddon(
-                            jarInputStream = inputStream,
-                            outputMcAddonFile = outputFile,
-                            addonName = safeName,
-                            logger = { msg -> appendLog(msg) }
-                        )
-
-                        withContext(Dispatchers.Main) {
-                            lastConvertedFile = outputFile
-                            shareAddonButton.isEnabled = true
-                            appendLog("=== CONVERSION COMPLETE ===")
-                            appendLog("Mod ID detected: ${stats.modId}")
-                            appendLog("Item Textures ported: ${stats.itemTextures}")
-                            appendLog("Block Textures ported: ${stats.blockTextures}")
-                            appendLog("Bedrock Items generated: ${stats.generatedItems}")
-                            appendLog("Bedrock Blocks generated: ${stats.generatedBlocks}")
-                            appendLog("Output saved: ${outputFile.name}")
-                        }
-                    } catch (e: Exception) {
-                        withContext(Dispatchers.Main) {
-                            appendLog("[ERROR] ${e.message}")
-                        }
-                    }
-                }
-            }
-
-            private fun shareAddon(file: File) {
-                val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "application/octet-stream"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                startActivity(Intent.createChooser(intent, "Export or Open .mcaddon"))
-            }
-        }
-        EOF
-
-        cat << 'EOF' > app/src/main/java/com/example/modconverter/ModConverter.kt
-        package com.example.modconverter
-
-        import org.json.JSONArray
-        import org.json.JSONObject
-        import java.io.ByteArrayOutputStream
-        import java.io.File
-        import java.io.FileOutputStream
-        import java.io.InputStream
-        import java.util.UUID
-        import java.util.zip.ZipEntry
-        import java.util.zip.ZipInputStream
-        import java.util.zip.ZipOutputStream
-
-        data class ConversionStats(
-            val modId: String,
-            val itemTextures: Int,
-            val blockTextures: Int,
-            val generatedItems: Int,
-            val generatedBlocks: Int
-        )
-
-        object ModConverter {
-
-            fun convertJarToMcAddon(
-                jarInputStream: InputStream,
-                outputMcAddonFile: File,
-                addonName: String,
-                logger: (String) -> Unit
-            ): ConversionStats {
-                var modId = "custommod"
-                val itemTextures = mutableMapOf<String, ByteArray>()
-                val blockTextures = mutableMapOf<String, ByteArray>()
-                val langEntries = mutableMapOf<String, String>()
-
-                logger("Scanning .jar archive entries...")
-                ZipInputStream(jarInputStream).use { zis ->
-                    var entry: ZipEntry? = zis.nextEntry
-                    while (entry != null) {
-                        val name = entry.name
-                        if (!entry.isDirectory && name.startsWith("assets/")) {
-                            val parts = name.split("/")
-                            if (parts.size >= 5 && parts[2] == "textures" && name.endsWith(".png")) {
-                                modId = sanitizeId(parts[1])
-                                val folderType = parts[3]
-                                val rawFileName = parts.last().removeSuffix(".png")
-                                val cleanTexName = sanitizeId(rawFileName)
-
-                                if (folderType == "item" || folderType == "items") {
-                                    itemTextures[cleanTexName] = readBytes(zis)
-                                    logger("Found item texture: $cleanTexName.png")
-                                } else if (folderType == "block" || folderType == "blocks") {
-                                    blockTextures[cleanTexName] = readBytes(zis)
-                                    logger("Found block texture: $cleanTexName.png")
-                                }
-                            } else if (parts.size >= 4 && parts[2] == "lang" && parts.last().equals("en_us.json", ignoreCase = true)) {
-                                try {
-                                    val jsonStr = String(readBytes(zis), Charsets.UTF_8)
-                                    val json = JSONObject(jsonStr)
-                                    json.keys().forEach { k ->
-                                        langEntries[k] = json.optString(k)
-                                    }
-                                    logger("Parsed en_us.json (${langEntries.size} keys)")
-                                } catch (e: Exception) {
-                                    logger("Skipped lang file: ${e.message}")
-                                }
-                            }
-                        }
-                        zis.closeEntry()
-                        entry = zis.nextEntry
-                    }
-                }
-
-                val rpUuidHeader = UUID.randomUUID().toString()
-                val rpUuidModule = UUID.randomUUID().toString()
-                val bpUuidHeader = UUID.randomUUID().toString()
-                val bpUuidModule = UUID.randomUUID().toString()
-
-                logger("Building Bedrock Resource Pack & Behavior Pack...")
-
-                ZipOutputStream(FileOutputStream(outputMcAddonFile)).use { zos ->
-                    val rpManifest = createManifest(
-                        name = "$addonName RP",
-                        description = "Converted Resource Pack from Java mod ($modId)",
-                        headerUuid = rpUuidHeader,
-                        moduleUuid = rpUuidModule,
-                        moduleType = "resources",
-                        dependencyUuid = null
-                    )
-                    writeZipText(zos, "${addonName}_RP/manifest.json", rpManifest.toString(2))
-
-                    val bpManifest = createManifest(
-                        name = "$addonName BP",
-                        description = "Converted Behavior Pack from Java mod ($modId)",
-                        headerUuid = bpUuidHeader,
-                        moduleUuid = bpUuidModule,
-                        moduleType = "data",
-                        dependencyUuid = rpUuidHeader
-                    )
-                    writeZipText(zos, "${addonName}_BP/manifest.json", bpManifest.toString(2))
-
-                    val itemTextureData = JSONObject()
-                    for ((cleanName, bytes) in itemTextures) {
-                        val texPath = "textures/items/$cleanName"
-                        writeZipBytes(zos, "${addonName}_RP/$texPath.png", bytes)
-
-                        val texEntry = JSONObject().put("textures", texPath)
-                        itemTextureData.put("${modId}_$cleanName", texEntry)
-
-                        val itemBpJson = c
+        printf '%s\n' \
+          'package com.example.modconverter' \
+          'import org.json.JSONArray' \
+          'import org.json.JSONObject' \
+          'import java.io.ByteArrayOutputStream' \
+          'import java.io.File' \
+          'import java.io.FileOutputStream' \
+          'import java.io.InputStream' \
+          'import java.util.UUID' \
+          'import java.util.zip.ZipEntry' \
+          'import java.util.zip.ZipInputStream' \
+          'import java.util.zip.ZipOutputStream' \
+          'data class ConversionStats(val modId: String, val itemTextures: Int, val blockTextures: Int, val generatedItems: Int, val generatedBlocks: Int)' \
+          'object ModConverter {' \
+          '    fun convertJarToMcAddon(jarInputStream: InputStream, outputMcAddonFile: File, addonName: String, logger: (String) -> Unit): ConversionStats {' \
+          '        var modId = "custommod"' \
+          '        val itemTextures = mutableMapOf<String, ByteArray>()' \
+          '        val blockTextures = mutableMapOf<String, ByteArray>()' \
+          '        val langEntries = mutableMapOf<String, String>()' \
+          '        logger("Scanning .jar archive...")' \
+          '        ZipInputStream(jarInputStream).use { zis ->' \
+          '            var entry: ZipEntry? = zis.nextEntry' \
+          '            while (entry != null) {' \
+          '                val name = entry.name' \
+          '                if (!entry.isDirectory && name.startsWith("assets/")) {' \
+          '                    val parts = name.split("/")' \
+          '                    if (parts.size >= 5 && parts[2] == "textures" && name.endsWith(".png")) {' \
+          '                        modId = sanitizeId(parts[1])' \
+          '                        val folderType = parts[3]' \
+          '                        val cleanTexName = sanitizeId(parts.last().removeSuffix(".png"))' \
+          '                        if (folderType == "item" || folderType == "items") {' \
+          '                            itemTextures[cleanTexName] = readBytes(zis)' \
+          '                            logger("Item texture: $cleanTexName.png")' \
+          '                        } else if (folderType == "block" || folderType == "blocks") {' \
+          '                            blockTextures[cleanTexName] = readBytes(zis)' \
+          '                            logger("Block texture: $cleanTexName.png")' \
+          '                        }' \
+          '                    } else if (parts.size >= 4 && parts[2] == "lang" && parts.last().equals("en_us.json", ignoreCase = true)) {' \
+          '                        try {' \
+          '                            val json = JSONObject(String(readBytes(zis), Charsets.UTF_8))' \
+          '                            json.keys().forEach { k -> langEntries[k] = json.optString(k) }' \
+          '                        } catch (_: Exception) {}' \
+          '                    }' \
+          '                }' \
+          '                zis.closeEntry()' \
+          '                entry = zis.nextEntry' \
+          '            }' \
+          '        }' \
+          '        val rpUuidH = UUID.randomUUID().toString()' \
+          '        val rpUuidM = UUID.randomUUID().toString()' \
+          '        val bpUuidH = UUID.randomUUID().toString()' \
+          '        val bpUuidM = UUID.randomUUID().toString()' \
+          '        ZipOutputStream(FileOutputStream(outputMcAddonFile)).use { zos ->' \
+          '            writeZipText(zos, "${addonName}_RP/manifest.json", createManifest("$addonName RP", "RP ($modId)", rpUuidH, rpUuidM, "resources", null).toString(2))' \
+          '            writeZipText(zos, "${addonName}_BP/manifest.json", createManifest("$addonName BP", "BP ($modId)", bpUuidH, bpUuidM, "data", rpUuidH).toString(2))' \
+          '            val itemData = JSONObject()' \
+          '            for ((cleanName, bytes) in itemTextures) {' \
+          '                val texPath = "textures/items/$cleanName"' \
+          '                writeZipBytes(zos, "${addonName}_RP/$texPath.png", bytes)' \
+          '                itemData.put("${modId}_$cleanName", JSONObject().put("textures", texPath))' \
+          '                writeZipText(zos, "${addonName}_BP/items/$cleanName.json", createBedrockItemJson(modId, cleanName, "${modId}_$cleanName").toString(2))' \
+          '            }' \
+          '            writeZipText(zos, "${addonName}_RP/textures/item_texture.json", JSONObject().put("resource_pack_name", addonName).put("texture_name", "atlas.items").put("texture_data", itemData).toString(2))' \
+          '            val terrainData = JSONObject()' \
+          '            for ((cleanName, bytes) in blockTextures) {' \
+          '                val texPath = "textures/blocks/$cleanName"' \
+          '                writeZipBytes(zos, "${addonName}_RP/$texPath.png", bytes)' \
+          '                terrainData.put("${modId}_$cleanName", JSONObject().put("textures", texPath))' \
+          '                writeZipText(zos, "${addonName}_BP/blocks/$cleanName.json", createBedrockBlockJson(modId, cleanName, "${modId}_$cleanName").toString(2))' \
+          '            }' \
+          '            writeZipText(zos, "${addonName}_RP/textures/terrain_texture.json", JSONObject().put("resource_pack_name", addonName).put("texture_name", "atlas.terrain").put("padding", 8).put("num_mip_levels", 4).put("texture_data", terrainData).toString(2))' \
+          '            val langLines = mutableListOf<String>()' \
+          '            for (c in itemTextures.keys) {' \
+          '                val d = langEntries["item.$modId.$c"] ?: c' \
+          '                langLines.add("item.$modId:$c.name=$d")' \
+          '            }' \
+          '            for (c in blockTextures.keys) {' \
+          '                val d = langEntries["block.$modId.$c"] ?: c' \
+          '                langLines.add("tile.$modId:$c.name=$d")' \
+          '            }' \
+          '            writeZipText(zos, "${addonName}_RP/texts/en_US.lang", langLines.joinToString("\n"))' \
+          '        }' \
+          '        return ConversionStats(modId, itemTextures.size, blockTextures.size, itemTextures.size, blockTextures.size)' \
+          '    }' \
+          '    private fun sanitizeId(raw: String): String {' \
+          '        val sb = StringBuilder()' \
+          '        for (ch in raw.lowercase()) {' \
+          '            if (ch in '\''a'\''..'\''z'\'' || ch in '\''0'\''..'\''9'\'' || ch == '\''_'\'') sb.append(ch) else sb.append('\''_'\'')' \
+          '        }' \
+          '        return sb.toString().ifBlank { "item" }' \
+          '    }' \
+          '    private fun createManifest(name: String, desc: String, hUuid: String, mUuid: String, mType: String, depUuid: String?): JSONObject {' \
+          '        val minEng = JSONArray().put(1).put(20).put(80)' \
+          '        v

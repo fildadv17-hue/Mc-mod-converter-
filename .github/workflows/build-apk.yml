@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Organize and Fix Files
+    - name: Upgrade Converter for Deep Subfolders & Creative Menu
       run: |
         mkdir -p app/src/main/java/com/example/modconverter
         mkdir -p app/src/main/res/layout
@@ -21,10 +21,236 @@ jobs:
         mv -f activity_main.xml app/src/main/res/layout/ 2>/dev/null || true
         mv -f file_paths.xml app/src/main/res/xml/ 2>/dev/null || true
         mv -f MainActivity.kt app/src/main/java/com/example/modconverter/ 2>/dev/null || true
-        mv -f ModConverter.kt app/src/main/java/com/example/modconverter/ 2>/dev/null || true
-        sed -i 's/\\././g' app/src/main/java/com/example/modconverter/ModConverter.kt
         sed -i ':a;N;$!ba;s/("\n/("\\n/g' app/src/main/java/com/example/modconverter/MainActivity.kt
-        sed -i ':a;N;$!ba;s/\n")/\\n")/g' app/src/main/java/com/example/modconverter/ModConverter.kt
+
+        cat << 'EOF' > app/src/main/java/com/example/modconverter/ModConverter.kt
+        package com.example.modconverter
+
+        import org.json.JSONArray
+        import org.json.JSONObject
+        import java.io.ByteArrayOutputStream
+        import java.io.File
+        import java.io.FileOutputStream
+        import java.io.InputStream
+        import java.util.UUID
+        import java.util.zip.ZipEntry
+        import java.util.zip.ZipInputStream
+        import java.util.zip.ZipOutputStream
+
+        data class ConversionStats(
+            val modId: String,
+            val itemTextures: Int,
+            val blockTextures: Int,
+            val generatedItems: Int,
+            val generatedBlocks: Int
+        )
+
+        object ModConverter {
+
+            fun convertJarToMcAddon(
+                jarInputStream: InputStream,
+                outputMcAddonFile: File,
+                addonName: String,
+                logger: (String) -> Unit
+            ): ConversionStats {
+                var modId = "portedmod"
+                val itemTextures = mutableMapOf<String, ByteArray>()
+                val blockTextures = mutableMapOf<String, ByteArray>()
+                val langEntries = mutableMapOf<String, String>()
+
+                logger("Scanning .jar archive (including nested subfolders)...")
+                ZipInputStream(jarInputStream).use { zis ->
+                    var entry: ZipEntry? = zis.nextEntry
+                    while (entry != null) {
+                        val name = entry.name
+                        if (!entry.isDirectory && name.startsWith("assets/")) {
+                            val parts = name.split("/")
+                            if (parts.size >= 5 && parts[1] != "minecraft" && parts[2] == "textures" && name.endsWith(".png")) {
+                                modId = sanitizeId(parts[1])
+                                val category = parts[3]
+                                val rawSubPath = parts.subList(4, parts.size).joinToString("_").removeSuffix(".png")
+                                val cleanTexName = sanitizeId(rawSubPath)
+
+                                if (category == "item" || category == "items") {
+                                    itemTextures[cleanTexName] = readBytes(zis)
+                                    logger("Ported item texture: $cleanTexName")
+                                } else if (category == "block" || category == "blocks") {
+                                    blockTextures[cleanTexName] = readBytes(zis)
+                                    logger("Ported block texture: $cleanTexName")
+                                }
+                            } else if (parts.size >= 4 && parts[2] == "lang" && parts.last().equals("en_us.json", ignoreCase = true)) {
+                                try {
+                                    val json = JSONObject(String(readBytes(zis), Charsets.UTF_8))
+                                    json.keys().forEach { k -> langEntries[k] = json.optString(k) }
+                                } catch (_: Exception) {}
+                            }
+                        }
+                        zis.closeEntry()
+                        entry = zis.nextEntry
+                    }
+                }
+
+                val rpUuidHeader = UUID.randomUUID().toString()
+                val rpUuidModule = UUID.randomUUID().toString()
+                val bpUuidHeader = UUID.randomUUID().toString()
+                val bpUuidModule = UUID.randomUUID().toString()
+
+                ZipOutputStream(FileOutputStream(outputMcAddonFile)).use { zos ->
+                    val rpManifest = createManifest("$addonName RP", "Ported RP ($modId)", rpUuidHeader, rpUuidModule, "resources", null)
+                    writeZipText(zos, "${addonName}_RP/manifest.json", rpManifest.toString(2))
+
+                    val bpManifest = createManifest("$addonName BP", "Ported BP ($modId)", bpUuidHeader, bpUuidModule, "data", rpUuidHeader)
+                    writeZipText(zos, "${addonName}_BP/manifest.json", bpManifest.toString(2))
+
+                    val itemTextureData = JSONObject()
+                    for ((cleanName, bytes) in itemTextures) {
+                        val texPath = "textures/items/$cleanName"
+                        writeZipBytes(zos, "${addonName}_RP/$texPath.png", bytes)
+                        val atlasKey = "${modId}_$cleanName"
+                        itemTextureData.put(atlasKey, JSONObject().put("textures", texPath))
+
+                        val itemBpJson = createBedrockItemJson(modId, cleanName, atlasKey)
+                        writeZipText(zos, "${addonName}_BP/items/$cleanName.json", itemBpJson.toString(2))
+                    }
+
+                    val itemTextureJson = JSONObject()
+                        .put("resource_pack_name", addonName)
+                        .put("texture_name", "atlas.items")
+                        .put("texture_data", itemTextureData)
+                    writeZipText(zos, "${addonName}_RP/textures/item_texture.json", itemTextureJson.toString(2))
+
+                    val terrainTextureData = JSONObject()
+                    for ((cleanName, bytes) in blockTextures) {
+                        val texPath = "textures/blocks/$cleanName"
+                        writeZipBytes(zos, "${addonName}_RP/$texPath.png", bytes)
+                        val atlasKey = "${modId}_$cleanName"
+                        terrainTextureData.put(atlasKey, JSONObject().put("textures", texPath))
+
+                        val blockBpJson = createBedrockBlockJson(modId, cleanName, atlasKey)
+                        writeZipText(zos, "${addonName}_BP/blocks/$cleanName.json", blockBpJson.toString(2))
+                    }
+
+                    val terrainTextureJson = JSONObject()
+                        .put("resource_pack_name", addonName)
+                        .put("texture_name", "atlas.terrain")
+                        .put("padding", 8)
+                        .put("num_mip_levels", 4)
+                        .put("texture_data", terrainTextureData)
+                    writeZipText(zos, "${addonName}_RP/textures/terrain_texture.json", terrainTextureJson.toString(2))
+
+                    val langLines = mutableListOf<String>()
+                    for (cleanName in itemTextures.keys) {
+                        val title = langEntries["item.$modId.$cleanName"]
+                            ?: cleanName.split("_").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+                        langLines.add("item.$modId:$cleanName=$title")
+                        langLines.add("item.$modId:$cleanName.name=$title")
+                    }
+                    for (cleanName in blockTextures.keys) {
+                        val title = langEntries["block.$modId.$cleanName"]
+                            ?: cleanName.split("_").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+                        langLines.add("tile.$modId:$cleanName.name=$title")
+                    }
+                    writeZipText(zos, "${addonName}_RP/texts/en_US.lang", langLines.joinToString("\n"))
+                    writeZipText(zos, "${addonName}_RP/texts/languages.json", "[\"en_US\"]")
+                }
+
+                return ConversionStats(modId, itemTextures.size, blockTextures.size, itemTextures.size, blockTextures.size)
+            }
+
+            private fun sanitizeId(raw: String): String {
+                val sb = StringBuilder()
+                for (ch in raw.lowercase()) {
+                    if (ch in 'a'..'z' || ch in '0'..'9' || ch == '_') sb.append(ch) else sb.append('_')
+                }
+                return sb.toString().trim('_').ifBlank { "custom" }
+            }
+
+            private fun createManifest(
+                name: String,
+                description: String,
+                headerUuid: String,
+                moduleUuid: String,
+                moduleType: String,
+                dependencyUuid: String?
+            ): JSONObject {
+                val minEngine = JSONArray().put(1).put(20).put(50)
+                val versionArr = JSONArray().put(1).put(0).put(0)
+                val header = JSONObject()
+                    .put("name", name)
+                    .put("description", description)
+                    .put("uuid", headerUuid)
+                    .put("version", versionArr)
+                    .put("min_engine_version", minEngine)
+                val module = JSONObject()
+                    .put("type", moduleType)
+                    .put("uuid", moduleUuid)
+                    .put("version", versionArr)
+                val manifest = JSONObject()
+                    .put("format_version", 2)
+                    .put("header", header)
+                    .put("modules", JSONArray().put(module))
+                if (dependencyUuid != null) {
+                    manifest.put("dependencies", JSONArray().put(JSONObject().put("uuid", dependencyUuid).put("version", versionArr)))
+                }
+                return manifest
+            }
+
+            private fun createBedrockItemJson(modId: String, itemName: String, iconAtlasKey: String): JSONObject {
+                val displayName = itemName.split("_").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+                val components = JSONObject()
+                    .put("minecraft:icon", JSONObject().put("texture", iconAtlasKey))
+                    .put("minecraft:display_name", JSONObject().put("value", displayName))
+                    .put("minecraft:max_stack_size", 64)
+                val description = JSONObject()
+                    .put("identifier", "$modId:$itemName")
+                    .put("menu_category", JSONObject().put("category", "items"))
+                val itemObj = JSONObject()
+                    .put("description", description)
+                    .put("components", components)
+                return JSONObject()
+                    .put("format_version", "1.20.50")
+                    .put("minecraft:item", itemObj)
+            }
+
+            private fun createBedrockBlockJson(modId: String, blockName: String, textureAtlasKey: String): JSONObject {
+                val materialInstances = JSONObject().put(
+                    "*",
+                    JSONObject().put("texture", textureAtlasKey).put("render_method", "alpha_test")
+                )
+                val components = JSONObject()
+                    .put("minecraft:geometry", "minecraft:geometry.full_block")
+                    .put("minecraft:material_instances", materialInstances)
+                val description = JSONObject()
+                    .put("identifier", "$modId:$blockName")
+                    .put("menu_category", JSONObject().put("category", "construction"))
+                val blockObj = JSONObject()
+                    .put("description", description)
+                    .put("components", components)
+                return JSONObject()
+                    .put("format_version", "1.20.50")
+                    .put("minecraft:block", blockObj)
+            }
+
+            private fun readBytes(input: InputStream): ByteArray {
+                val buffer = ByteArrayOutputStream()
+                val data = ByteArray(4096)
+                var nRead: Int
+                while (input.read(data, 0, data.size).also { nRead = it } != -1) buffer.write(data, 0, nRead)
+                return buffer.toByteArray()
+            }
+
+            private fun writeZipText(zos: ZipOutputStream, path: String, content: String) {
+                writeZipBytes(zos, path, content.toByteArray(Charsets.UTF_8))
+            }
+
+            private fun writeZipBytes(zos: ZipOutputStream, path: String, bytes: ByteArray) {
+                zos.putNextEntry(ZipEntry(path))
+                zos.write(bytes)
+                zos.closeEntry()
+            }
+        }
+        EOF
+
         printf 'plugins {\n id "com.android.application"\n id "org.jetbrains.kotlin.android"\n}\nandroid {\n namespace "com.example.modconverter"\n compileSdk 34\n defaultConfig {\n applicationId "com.example.modconverter"\n minSdk 26\n targetSdk 34\n versionCode 1\n versionName "1.0"\n }\n compileOptions {\n sourceCompatibility JavaVersion.VERSION_17\n targetCompatibility JavaVersion.VERSION_17\n }\n kotlinOptions {\n jvmTarget = "17"\n }\n}\ndependencies {\n implementation "androidx.core:core-ktx:1.12.0"\n implementation "androidx.appcompat:appcompat:1.6.1"\n implementation "com.google.android.material:material:1.11.0"\n implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"\n implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.7.0"\n}\n' > app/build.gradle
         printf 'plugins {\n id "com.android.application" version "8.2.2" apply false\n id "org.jetbrains.kotlin.android" version "1.9.22" apply false\n}\n' > build.gradle
 

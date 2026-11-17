@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Java Mod (.jar) to Bedrock (.mcaddon)"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Extracts textures, models, lang files, and item/block definitions from a Java Forge/Fabric .jar mod and packages them into a Bedrock Resource + Behavior Pack (.mcaddon). Note: Compiled Java bytecode (.class) cannot run natively on Bedrock."
+        android:textSize="13sp"
+        android:layout_marginBottom="16dp"/>
+
+    <EditText
+        android:id="@+id/addonNameInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Enter Add-On Name (e.g. MyPortedMod)"
+        android:text="PortedJavaMod"
+        android:layout_marginBottom="12dp"/>
+
+    <Button
+        android:id="@+id/selectJarButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Select Java Mod (.jar)"
+        android:layout_marginBottom="12dp"/>
+
+    <Button
+        android:id="@+id/shareAddonButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Export / Open .mcaddon in Minecraft"
+        android:enabled="false"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Conversion Log:"
+        android:textStyle="bold"
+        android:layout_marginBottom="4dp"/>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#1E1E1E"
+        android:padding="10dp">
+
+        <TextView
+            android:id="@+id/logTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textColor="#00FF66"
+            android:text="Ready. Select a .jar mod file to start conversion..."
+            android:textSize="12sp" />
+    </ScrollView>
+
+</LinearLayout>
